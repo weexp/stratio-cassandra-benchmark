@@ -18,6 +18,7 @@ import org.apache.log4j.chainsaw.Main;
 
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ConsistencyLevel;
+import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
 import com.google.common.util.concurrent.RateLimiter;
 import com.stratio.cassandra.index.util.Log;
@@ -86,18 +87,22 @@ public class App {
 		Integer threads = Integer.parseInt(properties.getProperty("threads"));
 		Integer queries = Integer.parseInt(properties.getProperty("queries"));
 		Integer limit = Integer.parseInt(properties.getProperty("limit"));
+		Boolean relevance = Boolean.parseBoolean(properties.getProperty("relevance"));
 
 		Cluster cluster = Cluster.builder().addContactPoint(hosts).build();
 		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.QUORUM);
 		logger.debug("Connected to cluster (" + hosts + "): " + cluster.getMetadata().getClusterName() + "\n");
 		Session session = cluster.connect();
 
+		String query = String.format("SELECT * FROM %s.%s WHERE %s=? LIMIT %d;", keyspace, table, column, limit);
+		PreparedStatement ps = session.prepare(query);
+
 		RateLimiter rateLimiter = RateLimiter.create(rate);
 		Stats stats = new Stats();
 
 		ExecutorService executorService = Executors.newFixedThreadPool(threads);
 		for (int i = 0; i < threads; i++) {
-			Client client = new Client(session, rateLimiter, stats, dataset, keyspace, table, column, queries, limit);
+			Client client = new Client(session, ps, rateLimiter, stats, dataset, column, queries, relevance);
 			executorService.execute(client);
 		}
 		executorService.shutdown();

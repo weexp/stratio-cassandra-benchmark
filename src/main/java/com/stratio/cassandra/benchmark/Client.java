@@ -4,72 +4,69 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import com.datastax.driver.core.Cluster;
-import com.datastax.driver.core.ConsistencyLevel;
+import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
-import com.datastax.driver.core.querybuilder.BuiltStatement;
-import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.google.common.util.concurrent.RateLimiter;
 
 public class Client implements Runnable {
 
 	private static final Logger logger = Logger.getLogger("benchmark");
 
+	private Session session;
+	private PreparedStatement ps;
 	private RateLimiter rateLimiter;
 	private Stats stats;
-	private String keyspace = null;
-	private String table = null;
 	private String column = null;
 	private Integer queries = null;
-	private Integer limit = null;
 	private Dataset dataset;
-	private Session session;
+	private Boolean relevance;
 
-	public Client(Session session,
+	public Client(Session session,PreparedStatement ps,
 	              RateLimiter rateLimiter,
 	              Stats stats,
 	              Dataset dataset,
-	              String keyspace,
-	              String table,
 	              String column,
 	              Integer queries,
-	              Integer limit) {
+	              Boolean relevance) {
 		this.session = session;
+		this.ps = ps;
 		this.rateLimiter = rateLimiter;
 		this.stats = stats;
-		this.keyspace = keyspace;
-		this.table = table;
 		this.column = column;
 		this.queries = queries;
-		this.limit = limit;
 		this.dataset = dataset;
+		this.relevance = relevance;
 	}
 
 	public void run() {
+		try {
+
 
 		for (String data : dataset.get(queries)) {
 			rateLimiter.acquire();
-			String clause = String.format("{query : {type : \"%s\", default_field : \"lucene\", query : \"%s\"}}",
+			String clause = String.format("{%s : {type : \"lucene\", default_field : \"%s\", query : \"%s\"}}",
+			                              relevance ? "query" : "filter",
 			                              column,
 			                              data);
 			long startTime = System.currentTimeMillis();
-			BuiltStatement statement = QueryBuilder.select()
-			                                       .from(keyspace, table)
-			                                       .where(QueryBuilder.eq(column, clause))
-			                                       .limit(limit);
-			ResultSet rs = session.execute(statement);
+
+			ResultSet rs = session.execute(ps.bind(clause));
 			List<Row> rows = rs.all();
 
 			long queryTime = System.currentTimeMillis() - startTime;
 			stats.inc(queryTime);
-			logger.debug("QUERY : " + statement + " " + queryTime + " ms");
+			logger.debug("QUERY : " + ps.getQueryString() + " " + queryTime + " ms");
 
 			// for (Row row : rows) {
 			// logger.debug("\tROW : " + row);
 			// }
 
+		}
+		}catch (Exception e) {
+			e.printStackTrace();
+			logger.error(e);
 		}
 	}
 
