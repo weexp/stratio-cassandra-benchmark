@@ -16,6 +16,7 @@ import org.apache.commons.cli.Options;
 import org.apache.log4j.Logger;
 import org.apache.log4j.chainsaw.Main;
 
+import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.PreparedStatement;
@@ -94,15 +95,18 @@ public class App {
 		logger.debug("Connected to cluster (" + hosts + "): " + cluster.getMetadata().getClusterName() + "\n");
 		Session session = cluster.connect();
 
+		Stats stats = new Stats();
+		RateLimiter rateLimiter = RateLimiter.create(rate);
+		ExecutorService executorService = Executors.newFixedThreadPool(threads);
 		String query = String.format("SELECT * FROM %s.%s WHERE %s=? LIMIT %d;", keyspace, table, column, limit);
 		PreparedStatement ps = session.prepare(query);
-
-		RateLimiter rateLimiter = RateLimiter.create(rate);
-		Stats stats = new Stats();
-
-		ExecutorService executorService = Executors.newFixedThreadPool(threads);
-		for (int i = 0; i < threads; i++) {
-			Client client = new Client(session, ps, rateLimiter, stats, dataset, column, queries, relevance);
+		for (String data : dataset.get(queries)) {
+			String clause = String.format("{%s : {type : \"lucene\", default_field : \"%s\", query : \"%s\"}}",
+			                              relevance ? "query" : "filter",
+			                              column,
+			                              data);
+			BoundStatement bs = ps.bind(clause);
+			Client client = new Client(session, bs, rateLimiter, stats, dataset);
 			executorService.execute(client);
 		}
 		executorService.shutdown();
