@@ -3,6 +3,7 @@ package com.stratio.cassandra.benchmark;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -90,7 +91,10 @@ public class App {
 		Integer limit = Integer.parseInt(properties.getProperty("limit"));
 		Boolean relevance = Boolean.parseBoolean(properties.getProperty("relevance"));
 
-		Cluster cluster = Cluster.builder().addContactPoint(hosts).build();
+		Cluster cluster = Cluster.builder()
+                .addContactPoint(hosts)
+                .withLoadBalancingPolicy(new LocalMachineLoadBalancingPolicy(InetAddress.getByName(hosts)))
+                .build();
 		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.QUORUM);
 		logger.debug("Connected to cluster (" + hosts + "): " + cluster.getMetadata().getClusterName() + "\n");
 		Session session = cluster.connect();
