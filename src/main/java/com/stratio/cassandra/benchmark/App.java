@@ -17,10 +17,8 @@ import org.apache.commons.cli.Options;
 import org.apache.log4j.Logger;
 import org.apache.log4j.chainsaw.Main;
 
-import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ConsistencyLevel;
-import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Session;
 import com.google.common.util.concurrent.RateLimiter;
 import com.stratio.cassandra.index.util.Log;
@@ -92,9 +90,9 @@ public class App {
 		Boolean relevance = Boolean.parseBoolean(properties.getProperty("relevance"));
 
 		Cluster cluster = Cluster.builder()
-                .addContactPoint(hosts)
-                .withLoadBalancingPolicy(new LocalMachineLoadBalancingPolicy(InetAddress.getByName(hosts)))
-                .build();
+		                         .addContactPoint(hosts)
+		                         .withLoadBalancingPolicy(new LocalMachineLoadBalancingPolicy(InetAddress.getByName(hosts)))
+		                         .build();
 		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.QUORUM);
 		logger.debug("Connected to cluster (" + hosts + "): " + cluster.getMetadata().getClusterName() + "\n");
 		Session session = cluster.connect();
@@ -102,15 +100,13 @@ public class App {
 		Stats stats = new Stats();
 		RateLimiter rateLimiter = RateLimiter.create(rate);
 		ExecutorService executorService = Executors.newFixedThreadPool(threads);
-		String query = String.format("SELECT * FROM %s.%s WHERE %s=? LIMIT %d;", keyspace, table, column, limit);
-		PreparedStatement ps = session.prepare(query);
 		for (String data : dataset.get(queries)) {
+			rateLimiter.acquire();
 			String clause = String.format("{%s : {type : \"lucene\", default_field : \"%s\", query : \"%s\"}}",
 			                              relevance ? "query" : "filter",
 			                              column,
 			                              data);
-			BoundStatement bs = ps.bind(clause);
-			Client client = new Client(session, bs, rateLimiter, stats, dataset);
+			Client client = new Client(session, keyspace, table, column, clause, limit, stats, dataset);
 			executorService.execute(client);
 		}
 		executorService.shutdown();
