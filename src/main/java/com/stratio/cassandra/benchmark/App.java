@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,7 +21,6 @@ import org.apache.log4j.chainsaw.Main;
 import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.Session;
-import com.google.common.util.concurrent.RateLimiter;
 import com.stratio.cassandra.index.util.Log;
 
 /**
@@ -94,27 +94,22 @@ public class App {
 		                         .withLoadBalancingPolicy(new LocalMachineLoadBalancingPolicy(InetAddress.getByName(hosts)))
 		                         .build();
 		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.QUORUM);
-		logger.debug("Connected to cluster (" + hosts + "): " + cluster.getMetadata().getClusterName() + "\n");
 		Session session = cluster.connect();
 
 		Stats stats = new Stats();
-		RateLimiter rateLimiter = RateLimiter.create(rate);
 		ExecutorService executorService = Executors.newFixedThreadPool(threads);
-		for (String data : dataset.get(queries)) {
-			rateLimiter.acquire();
-			String clause = String.format("{%s : {type : \"lucene\", default_field : \"%s\", query : \"%s\"}}",
-			                              relevance ? "query" : "filter",
-			                              column,
-			                              data);
-			Client client = new Client(session, keyspace, table, column, clause, limit, stats, dataset);
+		for (int i = 0; i < threads; i++) {
+			List<String> data = dataset.get(queries);
+			Client client = new Client(session, stats, data, rate, limit, keyspace, table, column, relevance);
 			executorService.execute(client);
 		}
 		executorService.shutdown();
 		executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 
-		Log.info(stats.toString());
-
 		session.close();
+		cluster.close();
+
+		Log.info(stats.toString());
 
 		System.exit(1);
 	}
