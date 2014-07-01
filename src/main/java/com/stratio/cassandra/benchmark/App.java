@@ -89,7 +89,7 @@ public class App {
 		                         .addContactPoint(hosts)
 		                         .withLoadBalancingPolicy(new LocalMachineLoadBalancingPolicy(InetAddress.getByName(hosts)))
 		                         .build();
-		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.QUORUM);
+		cluster.getConfiguration().getQueryOptions().setConsistencyLevel(ConsistencyLevel.ONE);
 		Session session = cluster.connect();
 
 		Stats stats = new Stats();
