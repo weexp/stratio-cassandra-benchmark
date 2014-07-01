@@ -67,7 +67,7 @@ public class Client implements Runnable {
 				                            .limit(limit);
 				long startTime = System.currentTimeMillis();
 
-				ResultSet rs = session.execute(select.setConsistencyLevel(ConsistencyLevel.QUORUM));
+				ResultSet rs = session.execute(select.setConsistencyLevel(ConsistencyLevel.ONE));
 				List<Row> rows = rs.all();
 
 				long queryTime = System.currentTimeMillis() - startTime;

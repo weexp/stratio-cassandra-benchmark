@@ -23,10 +23,6 @@ import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.Session;
 import com.stratio.cassandra.index.util.Log;
 
-/**
- * Hello world!
- * 
- */
 public class App {
 
 	private static final Logger logger = Logger.getLogger("benchmark");
